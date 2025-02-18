@@ -22,18 +22,19 @@
         .sortable-list {
             list-style: none;
             padding: 0;
-            width: 300px;
+            width: 320px;
             background: white;
             border: 2px solid #ccc;
             border-radius: 5px;
         }
         .sortable-list li {
-            padding: 10px;
+            padding: 12px;
             margin: 5px;
             background: #ffcc80;
             cursor: grab;
             font-size: 18px;
             border-radius: 5px;
+            touch-action: none;
         }
         .sortable-list li.dragging {
             opacity: 0.5;
@@ -70,44 +71,73 @@
         <button onclick="checkOrder()">Check Order</button>
     </div>
 
+    <p id="msg" class="hidden"></p>
+    <div id="next-options" class="hidden">
+        <button onclick="nextLevel()">Continue to Next Level</button>
+        <button onclick="restartGame()">Restart at Level 1</button>
+    </div>
+    <div id="lost" class="hidden">
+        <button onclick="restartGame()">Restart at Level 1</button>
+    </div>
+
+
     <p id="congratulations" class="hidden">🎉 Congratulations! You completed all levels! 🎉</p>
 
     <audio id="clap" src="win.wav"></audio>
-    <audio id="aww" src="lose.wav"></audio>
+    <audio id="aww" src="lose.mp3"></audio>
 
     <script>
         let level = 1;
+        let draggedItem = null;
+        let touchStartY = 0;
+
         const levels = [
-            ["grass", "deer", "tiger"], // Level 1
-            ["plankton", "small fish", "big fish", "shark"], // Level 2
-            ["leaves", "caterpillar", "frog", "snake", "eagle"] // Level 3 (Final Level)
+            ["grass", "deer", "tiger"],
+            ["plankton", "small fish", "big fish", "shark"],
+            ["leaves", "caterpillar", "frog", "snake", "eagle"],
+            ["grass", "rabbit", "fox", "wolf"],
+            ["sun", "plants", "herbivore", "carnivore"],
+            ["algae", "zooplankton", "small fish", "big fish", "whale"],
+            ["fish", "seagull", "eagle"] // Level 10
         ];
+
         const animalEmojis = {
-            "grass": "🌿",
-            "deer": "🦌",
-            "tiger": "🐅",
-            "plankton": "🦠",
-            "small fish": "🐟",
-            "big fish": "🐠",
-            "shark": "🦈",
-            "leaves": "🍃",
-            "caterpillar": "🐛",
-            "frog": "🐸",
-            "snake": "🐍",
-            "eagle": "🦅"
+            "grass": "🌿", "deer": "🦌", "tiger": "🐅",
+            "plankton": "🦠", "small fish": "🐟", "big fish": "🐠", "shark": "🦈",
+            "leaves": "🍃", "caterpillar": "🐛", "frog": "🐸", "snake": "🐍", "eagle": "🦅",
+            "rabbit": "🐇", "fox": "🦊", "wolf": "🐺",
+            "sun": "☀️", "plants": "🌱", "herbivore": "🐄", "carnivore": "🦁",
+            "algae": "🌿", "zooplankton": "🦠", "whale": "🐋",
+            "bee": "🐝", "cow": "🐄", "lion": "🦁",
+            "mouse": "🐭", "cat": "🐱", "dog": "🐶",
+            "owl": "🦉", "seagull": "🕊️", "fish": "🐟"
         };
 
+        function shuffleArray(array) {
+            let shuffled = array.slice();
+            do {
+                shuffled.sort(() => Math.random() - 0.5);
+            } while (JSON.stringify(shuffled) === JSON.stringify(array)); // Prevent correct order at start
+            return shuffled;
+        }
+
+
         function loadLevel() {
+            
             const list = document.querySelector(".sortable-list");
             list.innerHTML = "";
-            document.getElementById("level-title").innerText = `Level ${level}: Sort the Animals in the Correct Food Chain Order`;
+            document.getElementById("level-title").innerText = `Level ${level}: Sort the Animals in the Correct Order`;
+            document.getElementById("msg").classList.add("hidden");
+            document.getElementById("next-options").classList.add("hidden");
+            document.getElementById("lost").classList.add("hidden");
 
-            let shuffledAnimals = [...levels[level - 1]].sort(() => Math.random() - 0.5);
+            let shuffledAnimals = shuffleArray(levels[level-1])
             shuffledAnimals.forEach(animal => {
                 let li = document.createElement("li");
-                li.innerText = animalEmojis[animal] + " " + animal;
+                    li.innerText = animalEmojis[animal] + " " + animal;
                 li.setAttribute("id", animal);
                 li.setAttribute("draggable", "true");
+
                 li.addEventListener("dragstart", () => {
                     draggedItem = li;
                     li.classList.add("dragging");
@@ -116,57 +146,68 @@
                     draggedItem = null;
                     li.classList.remove("dragging");
                 });
+
+                li.addEventListener("touchstart", (e) => {
+                    draggedItem = li;
+                    touchStartY = e.touches[0].clientY;
+                    li.classList.add("dragging");
+                });
+
+                li.addEventListener("touchmove", (e) => {
+                    if (!draggedItem) return;
+                    const touchY = e.touches[0].clientY;
+                    const overElement = document.elementFromPoint(e.touches[0].clientX, touchY);
+                    if (overElement && overElement.tagName === "LI" && overElement !== draggedItem) {
+                        let list = document.querySelector(".sortable-list");
+                        list.insertBefore(draggedItem, touchY > touchStartY ? overElement.nextSibling : overElement);
+                        touchStartY = touchY;
+                    }
+                });
+
+                li.addEventListener("touchend", () => {
+                    draggedItem = null;
+                    li.classList.remove("dragging");
+                });
+
                 list.appendChild(li);
             });
-        }
-
-        let draggedItem = null;
-        const list = document.querySelector(".sortable-list");
-
-        list.addEventListener("dragover", event => {
-            event.preventDefault();
-            const afterElement = getDragAfterElement(list, event.clientY);
-            if (draggedItem && afterElement == null) {
-                list.appendChild(draggedItem);
-            } else if (draggedItem && afterElement) {
-                list.insertBefore(draggedItem, afterElement);
-            }
-        });
-
-        function getDragAfterElement(list, y) {
-            const draggableElements = [...list.querySelectorAll("li:not(.dragging)")];
-            return draggableElements.reduce((closest, child) => {
-                const box = child.getBoundingClientRect();
-                const offset = y - box.top - box.height / 2;
-                return offset < 0 && offset > closest.offset ? { offset, element: child } : closest;
-            }, { offset: Number.NEGATIVE_INFINITY }).element;
         }
 
         function checkOrder() {
             const order = Array.from(document.querySelectorAll(".sortable-list li")).map(li => li.id);
             const correctOrder = levels[level - 1];
-
             if (JSON.stringify(order) === JSON.stringify(correctOrder)) {
                 document.getElementById("clap").play();
-                alert(`Correct! 🎉 Moving to Level ${level + 1}`);
-                if (level < levels.length) {
-                    level++;
-                    loadLevel();
-                } else {
-                    document.querySelector(".container").classList.add("hidden");
-                    document.getElementById("level-title").classList.add("hidden");
-                    document.getElementById("congratulations").classList.remove("hidden");
-                }
+                document.getElementById("msg").innerText = `🎉 Correct! Choose an option:`;
+                document.getElementById("msg").classList.remove("hidden");
+                document.getElementById("next-options").classList.remove("hidden");
             } else {
                 document.getElementById("aww").play();
-                alert("Oops! ❌ You lost. Returning to Level 1.");
-                level = 1;
-                loadLevel();
+                document.getElementById("msg").innerText = "😢 You Lost! Restarting at Level 1...";
+                document.getElementById("msg").classList.remove("hidden");
+                document.getElementById("lost").classList.remove("hidden");
+
             }
+        }
+
+        function nextLevel() {
+            if (level < levels.length) {
+                level++;
+                loadLevel();
+            } else {
+                document.getElementById("msg").innerText = "🎉 Congratulations! You won all levels!";
+                document.getElementById("next-options").classList.remove("hidden");
+            }
+        }
+
+        function restartGame() {
+            level = 1;
+            loadLevel();
         }
 
         loadLevel();
     </script>
+
 
 </body>
 </html>
